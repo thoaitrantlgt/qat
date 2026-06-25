@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+data/
+outputs/checkpoints/
+outputs/logs/
+outputs/policies/
+outputs/tables/
+

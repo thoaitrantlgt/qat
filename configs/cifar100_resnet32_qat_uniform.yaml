@@ -1,0 +1,37 @@
+seed: 42
+
+dataset:
+  name: cifar100
+  root: data
+  download: false
+  val_split: 0
+
+model:
+  name: resnet32
+
+qat:
+  weight_bits: 8
+  activation_bits: 8
+  first_last_bits: 8
+
+training:
+  epochs: 200
+  batch_size: 128
+  num_workers: 0
+  device: auto
+  log_interval: 100
+
+optimizer:
+  name: sgd
+  lr: 0.01
+  momentum: 0.9
+  weight_decay: 0.0005
+  nesterov: false
+
+scheduler:
+  name: cosine
+
+output:
+  checkpoint: outputs/checkpoints/resnet32_cifar100_qat_best.pt
+  log: outputs/logs/qat_cifar100_resnet32.json
+
