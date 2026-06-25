@@ -9,3 +9,6 @@ outputs/logs/
 outputs/policies/
 outputs/tables/
 
+.gitignore
+
+*.md
