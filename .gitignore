@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+data/
+outputs/
+
+plan.md
+qat_multi_agent_method_data_plan.md
+qat_multi_agent_research_notes.md
+

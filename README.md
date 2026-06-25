@@ -1,4 +1,4 @@
-# hpc-agent
+# qat-agent
 
 Multi-agent adaptive QAT for CNNs.
 
@@ -34,6 +34,12 @@ Multi-agent adaptive QAT for CNNs.
 
 ```powershell
 .\scripts\run_uniform_qat.cmd -Config configs/cifar10_resnet20_qat_uniform.yaml -Epochs 1
+```
+
+7. Run the baseline suite, summarize results, and generate a chart:
+
+```powershell
+.\scripts\run_baselines.cmd
 ```
 
 ## Notes
