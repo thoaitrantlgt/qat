@@ -36,7 +36,7 @@ Multi-agent adaptive QAT for CNNs.
 .\scripts\run_uniform_qat.cmd -Config configs/cifar10_resnet20_qat_uniform.yaml -Epochs 1
 ```
 
-7. Run the baseline suite, summarize results, and generate a chart:
+7. Run the baseline suite, summarize results, and generate a chart. The script will train any missing checkpoints first, then write the CSV/Markdown summary and chart:
 
 ```powershell
 .\scripts\run_baselines.cmd

@@ -69,12 +69,12 @@ def main() -> None:
         md_path = Path(args.markdown)
         md_path.parent.mkdir(parents=True, exist_ok=True)
         lines = [
-            "| name | top1 | accuracy_drop | model_size_mb | compression_ratio | avg_weight_bits | avg_activation_bits | bitops_ratio |",
-            "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+            "| name | top1 | accuracy_drop | model_size_mb | compression_ratio | avg_weight_bits | avg_activation_bits | bitops_ratio | w8a8_bitops_ratio |",
+            "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
         ]
         for row in summary_rows:
             lines.append(
-                "| {name} | {top1:.2f} | {accuracy_drop:.2f} | {model_size_mb:.3f} | {compression_ratio:.3f} | {avg_weight_bits:.2f} | {avg_activation_bits:.2f} | {bitops_ratio:.3f} |".format(
+                "| {name} | {top1:.2f} | {accuracy_drop:.2f} | {model_size_mb:.3f} | {compression_ratio:.3f} | {avg_weight_bits:.2f} | {avg_activation_bits:.2f} | {bitops_ratio:.3f} | {w8a8_bitops_ratio:.3f} |".format(
                     name=row.get("name", ""),
                     top1=as_float(row.get("top1")),
                     accuracy_drop=as_float(row.get("accuracy_drop")),
@@ -83,6 +83,7 @@ def main() -> None:
                     avg_weight_bits=as_float(row.get("avg_weight_bits")),
                     avg_activation_bits=as_float(row.get("avg_activation_bits")),
                     bitops_ratio=as_float(row.get("bitops_ratio")),
+                    w8a8_bitops_ratio=as_float(row.get("w8a8_bitops_ratio")),
                 )
             )
         md_path.write_text("\n".join(lines) + "\n", encoding="utf-8")

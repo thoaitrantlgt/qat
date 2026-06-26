@@ -3,7 +3,7 @@ seed: 42
 dataset:
   name: cifar100
   root: data
-  download: false
+  download: True
   val_split: 0
 
 model:
@@ -15,7 +15,7 @@ qat:
   first_last_bits: 8
 
 training:
-  epochs: 200
+  epochs: 1
   batch_size: 128
   num_workers: 0
   device: auto

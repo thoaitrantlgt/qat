@@ -72,8 +72,11 @@ def main() -> None:
         "avg_weight_bits": stats["avg_weight_bits"],
         "avg_activation_bits": stats["avg_activation_bits"],
         "bitops_ratio": stats["bitops_ratio"],
+        "w8a8_bitops_ratio": stats["w8a8_bitops_ratio"],
         "total_bitops": stats["total_bitops"],
         "total_params": stats["total_params"],
+        "layer_count": stats["layer_count"],
+        "block_count": stats["block_count"],
     }
 
     write_header = not csv_path.exists()
