@@ -66,6 +66,13 @@ For a fair CIFAR-10/ResNet20 baseline suite matching the multi-agent config:
 .\scripts\run_fair_comparison.cmd
 ```
 
+On Linux, macOS, WSL, or zsh:
+
+```bash
+chmod +x scripts/run_fair_comparison.sh
+./scripts/run_fair_comparison.sh
+```
+
 This writes the combined comparison table and chart under `outputs/tables/cifar10_resnet20/`.
 
 ## Notes
