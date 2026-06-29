@@ -62,6 +62,9 @@ class QuantConv2d(nn.Module):
         self.weight_quantizer.set_bits(self.w_bits)
         self.act_quantizer.set_bits(self.a_bits)
 
+    def get_bits(self) -> tuple[int, int]:
+        return self.w_bits, self.a_bits
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x_q = self.act_quantizer(x)
         w_q = self.weight_quantizer(self.weight)
@@ -101,6 +104,9 @@ class QuantLinear(nn.Module):
         self.a_bits = int(a_bits)
         self.weight_quantizer.set_bits(self.w_bits)
         self.act_quantizer.set_bits(self.a_bits)
+
+    def get_bits(self) -> tuple[int, int]:
+        return self.w_bits, self.a_bits
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x_q = self.act_quantizer(x)

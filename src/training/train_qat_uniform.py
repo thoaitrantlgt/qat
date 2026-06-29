@@ -9,8 +9,10 @@ import torch
 import yaml
 from torch import nn
 
+from src.agents.state_builder import AgentStateBuilder, summarize_agent_states
 from src.datasets.cifar import CIFAR_STATS, build_cifar_loaders
 from src.models.resnet_cifar_qat import build_cifar_resnet_qat
+from src.quantization.bitops import collect_resource_stats
 from src.quantization.policy_applier import set_uniform_bit_widths
 from src.training.train_fp32 import build_optimizer, build_scheduler, evaluate, load_config, resolve_device, train_one_epoch
 from src.utils.checkpoint import save_checkpoint
@@ -118,6 +120,10 @@ def main() -> None:
         if scheduler is not None:
             scheduler.step()
 
+        resource_stats = collect_resource_stats(model)
+        state_builder = AgentStateBuilder(resource_stats)
+        agent_states = state_builder.build(model, {"epoch": epoch, "total_epochs": epochs})
+        agent_state_summary = summarize_agent_states(agent_states)
         lr = optimizer.param_groups[0]["lr"]
         row = {
             "epoch": epoch,
@@ -129,12 +135,13 @@ def main() -> None:
             "epoch_seconds": train_metrics["seconds"],
             "weight_bits": weight_bits,
             "activation_bits": activation_bits,
+            "agent_state_summary": agent_state_summary,
         }
         history.append(row)
         print(
             f"epoch={epoch} lr={lr:.6f} train_loss={row['train_loss']:.4f} "
             f"train_top1={row['train_top1']:.2f} val_loss={row['val_loss']:.4f} "
-            f"val_top1={row['val_top1']:.2f}"
+            f"val_top1={row['val_top1']:.2f} agent_states={agent_state_summary['num_agents']}x{agent_state_summary['state_dim']}"
         )
 
         is_best = val_metrics["top1"] > best_top1

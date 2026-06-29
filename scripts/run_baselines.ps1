@@ -1,4 +1,6 @@
 param(
+    [ValidateSet("cifar100_resnet32", "cifar10_resnet20")]
+    [string]$Suite = "cifar100_resnet32",
     [int]$Epochs = 0,
     [switch]$Train,
     [switch]$SkipFP32
@@ -13,39 +15,82 @@ $pythonExe = if (Test-Path -LiteralPath ".venv\\Scripts\\python.exe") {
     "python"
 }
 
-$baselines = @(
-    @{
-        Name = "fp32"
-        Config = "configs/cifar100_resnet32_fp32.yaml"
-        Checkpoint = "outputs/checkpoints/resnet32_cifar100_fp32_best.pt"
-        TrainCmd = "scripts/run_fp32.cmd"
-        DefaultWarmStart = ""
-    },
-    @{
-        Name = "w8a8"
-        Config = "configs/cifar100_resnet32_qat_uniform.yaml"
-        Checkpoint = "outputs/checkpoints/resnet32_cifar100_qat_best.pt"
-        TrainCmd = "scripts/run_uniform_qat.cmd"
-        DefaultWarmStart = "outputs/checkpoints/resnet32_cifar100_fp32_best.pt"
-    },
-    @{
-        Name = "w4a8"
-        Config = "configs/cifar100_resnet32_qat_w4a8.yaml"
-        Checkpoint = "outputs/checkpoints/resnet32_cifar100_qat_w4a8_best.pt"
-        TrainCmd = "scripts/run_uniform_qat.cmd"
-        DefaultWarmStart = "outputs/checkpoints/resnet32_cifar100_fp32_best.pt"
-    },
-    @{
-        Name = "w4a4"
-        Config = "configs/cifar100_resnet32_qat_w4a4.yaml"
-        Checkpoint = "outputs/checkpoints/resnet32_cifar100_qat_w4a4_best.pt"
-        TrainCmd = "scripts/run_uniform_qat.cmd"
-        DefaultWarmStart = "outputs/checkpoints/resnet32_cifar100_fp32_best.pt"
-    }
-)
+if ($Suite -eq "cifar10_resnet20") {
+    $baselines = @(
+        @{
+            Name = "fp32"
+            Config = "configs/cifar10_resnet20_fp32.yaml"
+            Checkpoint = "outputs/checkpoints/resnet20_cifar10_fp32_best.pt"
+            TrainCmd = "scripts/run_fp32.cmd"
+            DefaultWarmStart = ""
+        },
+        @{
+            Name = "w8a8"
+            Config = "configs/cifar10_resnet20_qat_uniform.yaml"
+            Checkpoint = "outputs/checkpoints/resnet20_cifar10_qat_best.pt"
+            TrainCmd = "scripts/run_uniform_qat.cmd"
+            DefaultWarmStart = "outputs/checkpoints/resnet20_cifar10_fp32_best.pt"
+        },
+        @{
+            Name = "w4a8"
+            Config = "configs/cifar10_resnet20_qat_w4a8.yaml"
+            Checkpoint = "outputs/checkpoints/resnet20_cifar10_qat_w4a8_best.pt"
+            TrainCmd = "scripts/run_uniform_qat.cmd"
+            DefaultWarmStart = "outputs/checkpoints/resnet20_cifar10_fp32_best.pt"
+        },
+        @{
+            Name = "w4a4"
+            Config = "configs/cifar10_resnet20_qat_w4a4.yaml"
+            Checkpoint = "outputs/checkpoints/resnet20_cifar10_qat_w4a4_best.pt"
+            TrainCmd = "scripts/run_uniform_qat.cmd"
+            DefaultWarmStart = "outputs/checkpoints/resnet20_cifar10_fp32_best.pt"
+        }
+    )
+} else {
+    $baselines = @(
+        @{
+            Name = "fp32"
+            Config = "configs/cifar100_resnet32_fp32.yaml"
+            Checkpoint = "outputs/checkpoints/resnet32_cifar100_fp32_best.pt"
+            TrainCmd = "scripts/run_fp32.cmd"
+            DefaultWarmStart = ""
+        },
+        @{
+            Name = "w8a8"
+            Config = "configs/cifar100_resnet32_qat_uniform.yaml"
+            Checkpoint = "outputs/checkpoints/resnet32_cifar100_qat_best.pt"
+            TrainCmd = "scripts/run_uniform_qat.cmd"
+            DefaultWarmStart = "outputs/checkpoints/resnet32_cifar100_fp32_best.pt"
+        },
+        @{
+            Name = "w4a8"
+            Config = "configs/cifar100_resnet32_qat_w4a8.yaml"
+            Checkpoint = "outputs/checkpoints/resnet32_cifar100_qat_w4a8_best.pt"
+            TrainCmd = "scripts/run_uniform_qat.cmd"
+            DefaultWarmStart = "outputs/checkpoints/resnet32_cifar100_fp32_best.pt"
+        },
+        @{
+            Name = "w4a4"
+            Config = "configs/cifar100_resnet32_qat_w4a4.yaml"
+            Checkpoint = "outputs/checkpoints/resnet32_cifar100_qat_w4a4_best.pt"
+            TrainCmd = "scripts/run_uniform_qat.cmd"
+            DefaultWarmStart = "outputs/checkpoints/resnet32_cifar100_fp32_best.pt"
+        }
+    )
+}
+
+$tableRoot = "outputs/tables/$Suite"
+$csvPath = Join-Path $tableRoot "baselines.csv"
+$markdownPath = Join-Path $tableRoot "baselines.md"
+$summaryJsonPath = Join-Path $tableRoot "baselines_summary.json"
+$plotPath = Join-Path $tableRoot "baselines_comparison.png"
+New-Item -ItemType Directory -Force -Path $tableRoot | Out-Null
+if (Test-Path -LiteralPath $csvPath) {
+    Remove-Item -LiteralPath $csvPath -Force
+}
 
 if ($Train) {
-    Write-Host "info: retraining all baselines before reporting."
+    Write-Host "info: retraining all $Suite baselines before reporting."
 } else {
     $missingBaselines = @()
     foreach ($baseline in $baselines) {
@@ -57,7 +102,7 @@ if ($Train) {
         }
     }
     if ($missingBaselines.Count -gt 0) {
-        Write-Host "info: missing checkpoints detected, training: $($missingBaselines -join ', ')"
+        Write-Host "info: missing $Suite checkpoints detected, training: $($missingBaselines -join ', ')"
     }
 }
 
@@ -95,8 +140,11 @@ foreach ($baseline in $baselines) {
         continue
     }
 
-    & $pythonExe -m src.training.report_baseline --config $baseline.Config --checkpoint $baseline.Checkpoint --name $baseline.Name
+    $jsonPath = Join-Path $tableRoot "$($baseline.Name).json"
+    & $pythonExe -m src.training.report_baseline --config $baseline.Config --checkpoint $baseline.Checkpoint --name $baseline.Name --csv $csvPath --json $jsonPath
 }
 
-& $pythonExe -m src.training.summarize_baselines --csv outputs/tables/baselines.csv --markdown outputs/tables/baselines.md --json outputs/tables/baselines_summary.json
-& $pythonExe -m src.training.plot_baselines --csv outputs/tables/baselines.csv --output outputs/tables/baselines_comparison.png
+& $pythonExe -m src.training.summarize_baselines --csv $csvPath --markdown $markdownPath --json $summaryJsonPath
+& $pythonExe -m src.training.plot_baselines --csv $csvPath --output $plotPath
+
+Write-Host "info: wrote $Suite baseline table to $csvPath"

@@ -42,6 +42,32 @@ Multi-agent adaptive QAT for CNNs.
 .\scripts\run_baselines.cmd
 ```
 
+For a fair CIFAR-10/ResNet20 baseline suite matching the multi-agent config:
+
+```powershell
+.\scripts\run_baselines.cmd -Suite cifar10_resnet20 -Epochs 1
+```
+
+8. Run adaptive multi-agent QAT:
+
+```powershell
+.\scripts\run_marl_qat.cmd -Config configs/cifar10_resnet20_marl_qat.yaml -Epochs 1
+```
+
+9. Export and optionally fine-tune the static mixed-precision policy:
+
+```powershell
+.\scripts\export_policy.cmd -Config configs/cifar10_resnet20_marl_qat.yaml -Policy outputs/policies/resnet20_cifar10_marl_qat_policy.json -Checkpoint outputs/checkpoints/resnet20_cifar10_marl_qat_best.pt -FineTuneEpochs 1
+```
+
+10. Run the full fair comparison end-to-end:
+
+```powershell
+.\scripts\run_fair_comparison.cmd -Epochs 1 -FineTuneEpochs 1
+```
+
+This writes the combined comparison table and chart under `outputs/tables/cifar10_resnet20/`.
+
 ## Notes
 
 - The project uses Python 3.12.
