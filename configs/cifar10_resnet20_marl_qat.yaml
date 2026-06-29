@@ -15,13 +15,13 @@ qat:
   first_last_bits: 8
 
 marl:
-  warmup_epochs: 5
+  warmup_epochs: 20
   warmup_weight_bits: 8
   warmup_activation_bits: 8
-  policy_interval: 100
-  policy_lr: 0.0003
+  policy_interval: 200
+  policy_lr: 0.0001
   actor_hidden_dim: 128
-  entropy_beta: 0.01
+  entropy_beta: 0.02
   lambda_bitops: 0.1
   lambda_local: 0.01
   reward_smoothing_alpha: 0.9
@@ -31,14 +31,15 @@ marl:
 
 training:
   epochs: 100
-  batch_size: 1024
+  batch_size: 512
   num_workers: 8
   device: cuda
   log_interval: 100
+  grad_clip: 5.0
 
 optimizer:
   name: sgd
-  lr: 0.001
+  lr: 0.0005
   momentum: 0.9
   weight_decay: 0.0005
   nesterov: false

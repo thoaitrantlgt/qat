@@ -90,6 +90,7 @@ def main() -> None:
     last_checkpoint_path = checkpoint_path.with_name(checkpoint_path.stem + "_last.pt")
     log_path = Path(output_config.get("log", "outputs/logs/qat_cifar100_resnet32.json"))
     log_interval = int(config["training"].get("log_interval", 100))
+    grad_clip = float(config["training"].get("grad_clip", 0.0))
 
     def apply_precision(epoch: int) -> None:
         if warmup_epochs > 0 and epoch < warmup_epochs:
@@ -115,6 +116,7 @@ def main() -> None:
             device=device,
             epoch=epoch,
             log_interval=log_interval,
+            grad_clip=grad_clip if grad_clip > 0 else None,
         )
         val_metrics = evaluate(model, val_loader, criterion, device)
         if scheduler is not None:

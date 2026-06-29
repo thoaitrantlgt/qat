@@ -85,6 +85,7 @@ def train_one_epoch(
     device: torch.device,
     epoch: int,
     log_interval: int,
+    grad_clip: float | None = None,
 ) -> dict[str, float]:
     model.train()
     loss_meter = AverageMeter()
@@ -98,7 +99,12 @@ def train_one_epoch(
         optimizer.zero_grad(set_to_none=True)
         logits = model(images)
         loss = criterion(logits, targets)
+        if not torch.isfinite(loss):
+            print(f"warning: non-finite loss at epoch={epoch} step={step}; skipping batch.")
+            continue
         loss.backward()
+        if grad_clip is not None and grad_clip > 0:
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=float(grad_clip))
         optimizer.step()
 
         batch_size = targets.size(0)
@@ -186,6 +192,7 @@ def main() -> None:
     last_checkpoint_path = checkpoint_path.with_name(checkpoint_path.stem + "_last.pt")
     log_path = Path(output_config.get("log", "outputs/logs/fp32_cifar100_resnet32.json"))
     log_interval = int(config["training"].get("log_interval", 100))
+    grad_clip = float(config["training"].get("grad_clip", 0.0))
 
     total_start = time.time()
     for epoch in range(start_epoch, epochs):
@@ -197,6 +204,7 @@ def main() -> None:
             device=device,
             epoch=epoch,
             log_interval=log_interval,
+            grad_clip=grad_clip if grad_clip > 0 else None,
         )
         val_metrics = evaluate(model, val_loader, criterion, device)
         if scheduler is not None:

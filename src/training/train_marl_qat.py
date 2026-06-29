@@ -78,6 +78,7 @@ def train_one_batch(
     criterion: nn.Module,
     optimizer: torch.optim.Optimizer,
     device: torch.device,
+    grad_clip: float | None = None,
 ) -> dict[str, float]:
     model.train()
     images = images.to(device, non_blocking=True)
@@ -86,11 +87,16 @@ def train_one_batch(
     optimizer.zero_grad(set_to_none=True)
     logits = model(images)
     loss = criterion(logits, targets)
+    if not torch.isfinite(loss):
+        print("warning: non-finite MARL QAT loss; skipping batch.")
+        return {"loss": float("nan"), "top1": 0.0, "skipped": 1.0}
     loss.backward()
+    if grad_clip is not None and grad_clip > 0:
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=float(grad_clip))
     optimizer.step()
 
     top1 = accuracy(logits, targets, topk=(1,))[0].item()
-    return {"loss": float(loss.item()), "top1": float(top1)}
+    return {"loss": float(loss.item()), "top1": float(top1), "skipped": 0.0}
 
 
 def main() -> None:
@@ -178,6 +184,7 @@ def main() -> None:
     policy_path = Path(output_config.get("policy", "outputs/policies/marl_qat_policy.json"))
     log_path = Path(output_config.get("log", "outputs/logs/marl_qat.json"))
     log_interval = int(config["training"].get("log_interval", 100))
+    grad_clip = float(config["training"].get("grad_clip", 0.0))
 
     history: list[dict[str, Any]] = []
     policy_history: list[dict[str, Any]] = []
@@ -218,6 +225,15 @@ def main() -> None:
                 apply_first_last_bits(model, int(first_last_bits) if first_last_bits is not None else None)
                 updated_resource_stats = collect_resource_stats(model)
                 reward_result = reward_evaluator.evaluate(model, val_loader, device, resource_stats=updated_resource_stats)
+                if not torch.isfinite(torch.tensor(reward_result.validation_loss, device=device)):
+                    print(
+                        f"warning: sampled policy produced non-finite validation loss at "
+                        f"epoch={epoch} step={step}; reverting to W8A8 and skipping policy update."
+                    )
+                    set_uniform_bit_widths(model, 8, 8)
+                    apply_first_last_bits(model, int(first_last_bits) if first_last_bits is not None else None)
+                    global_step += 1
+                    continue
                 policy_update_result = policy_learner.update(
                     log_probs=log_probs,
                     entropy=entropy,
@@ -261,9 +277,11 @@ def main() -> None:
                 criterion=criterion,
                 optimizer=model_optimizer,
                 device=device,
+                grad_clip=grad_clip if grad_clip > 0 else None,
             )
-            loss_meter.update(batch_metrics["loss"], targets.size(0))
-            acc_meter.update(batch_metrics["top1"], targets.size(0))
+            if batch_metrics.get("skipped", 0.0) == 0.0:
+                loss_meter.update(batch_metrics["loss"], targets.size(0))
+                acc_meter.update(batch_metrics["top1"], targets.size(0))
 
             if log_interval > 0 and step % log_interval == 0:
                 print(
@@ -337,6 +355,7 @@ def main() -> None:
             device=device,
             epoch=epochs + fine_tune_epoch,
             log_interval=log_interval,
+            grad_clip=grad_clip if grad_clip > 0 else None,
         )
 
     final_metrics = evaluate(model, val_loader, criterion, device)

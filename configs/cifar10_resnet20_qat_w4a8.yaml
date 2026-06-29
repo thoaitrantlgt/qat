@@ -13,18 +13,19 @@ qat:
   weight_bits: 4
   activation_bits: 8
   first_last_bits: 8
-  warmup_epochs: 5
+  warmup_epochs: 20
 
 training:
   epochs: 100
-  batch_size: 1024
+  batch_size: 512
   num_workers: 8
   device: cuda
   log_interval: 100
+  grad_clip: 5.0
 
 optimizer:
   name: sgd
-  lr: 0.01
+  lr: 0.001
   momentum: 0.9
   weight_decay: 0.0005
   nesterov: false
