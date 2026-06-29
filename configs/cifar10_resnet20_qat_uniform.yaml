@@ -16,10 +16,10 @@ qat:
   warmup_epochs: 5
 
 training:
-  epochs: 200
-  batch_size: 128
-  num_workers: 0
-  device: auto
+  epochs: 100
+  batch_size: 256
+  num_workers: 4
+  device: cuda
   log_interval: 100
 
 optimizer:
@@ -35,4 +35,3 @@ scheduler:
 output:
   checkpoint: outputs/checkpoints/resnet20_cifar10_qat_best.pt
   log: outputs/logs/qat_cifar10_resnet20.json
-

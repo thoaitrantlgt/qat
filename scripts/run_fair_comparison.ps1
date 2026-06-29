@@ -1,6 +1,6 @@
 param(
-    [int]$Epochs = 1,
-    [int]$FineTuneEpochs = 0,
+    [int]$Epochs = 100,
+    [int]$FineTuneEpochs = 20,
     [switch]$Train
 )
 
