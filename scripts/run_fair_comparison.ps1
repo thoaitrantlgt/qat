@@ -31,7 +31,10 @@ if ($Train) {
 }
 & (Join-Path $PSScriptRoot "run_baselines.cmd") @baselineArgs
 
-& (Join-Path $PSScriptRoot "run_marl_qat.cmd") -Config "configs/cifar10_resnet20_marl_qat.yaml" -Epochs $Epochs
+& (Join-Path $PSScriptRoot "run_marl_qat.cmd") `
+    -Config "configs/cifar10_resnet20_marl_qat.yaml" `
+    -Fp32Checkpoint "outputs/checkpoints/resnet20_cifar10_fp32_best.pt" `
+    -Epochs $Epochs
 
 & $pythonExe -m src.training.export_policy `
     --config configs/cifar10_resnet20_marl_qat.yaml `

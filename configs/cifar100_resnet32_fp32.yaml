@@ -10,7 +10,7 @@ model:
   name: resnet32
 
 training:
-  epochs: 1
+  epochs: 100
   batch_size: 128
   num_workers: 0
   device: auto

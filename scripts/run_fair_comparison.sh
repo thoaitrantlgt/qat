@@ -119,6 +119,7 @@ report_baseline "w4a4" "$W4A4_CONFIG" "$W4A4_CKPT"
 
 "$PYTHON_EXE" -m src.training.train_marl_qat \
     --config configs/cifar10_resnet20_marl_qat.yaml \
+    --fp32-checkpoint "$FP32_CKPT" \
     --epochs "$EPOCHS"
 
 "$PYTHON_EXE" -m src.training.export_policy \

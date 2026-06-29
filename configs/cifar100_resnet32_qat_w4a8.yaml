@@ -16,7 +16,7 @@ qat:
   warmup_epochs: 5
 
 training:
-  epochs: 1
+  epochs: 100
   batch_size: 128
   num_workers: 0
   device: auto

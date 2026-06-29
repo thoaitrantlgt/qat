@@ -15,7 +15,7 @@ qat:
   first_last_bits: 8
 
 training:
-  epochs: 1
+  epochs: 100
   batch_size: 128
   num_workers: 0
   device: auto
