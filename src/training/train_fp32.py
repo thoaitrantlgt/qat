@@ -14,6 +14,7 @@ from torch.optim.lr_scheduler import CosineAnnealingLR, MultiStepLR
 from src.datasets.cifar import build_cifar_loaders
 from src.datasets.cifar import CIFAR_STATS
 from src.models.resnet_cifar import build_cifar_resnet
+from src.quantization.lsq import clamp_lsq_scales
 from src.utils.checkpoint import save_checkpoint
 from src.utils.logging import save_json
 from src.utils.metrics import AverageMeter, accuracy
@@ -41,16 +42,41 @@ def build_optimizer(config: dict[str, Any], model: nn.Module) -> torch.optim.Opt
     name = opt_config.get("name", "sgd").lower()
     lr = float(opt_config.get("lr", 0.1))
     weight_decay = float(opt_config.get("weight_decay", 5e-4))
+    quantizer_lr_multiplier = float(opt_config.get("quantizer_lr_multiplier", 1.0))
+    quantizer_weight_decay = float(opt_config.get("quantizer_weight_decay", weight_decay))
+    quantizer_params = []
+    other_params = []
+    for param_name, parameter in model.named_parameters():
+        if not parameter.requires_grad:
+            continue
+        if param_name.endswith(".scale") and "quantizer" in param_name:
+            quantizer_params.append(parameter)
+        else:
+            other_params.append(parameter)
+    params: Any
+    if quantizer_params and (
+        quantizer_lr_multiplier != 1.0 or quantizer_weight_decay != weight_decay
+    ):
+        params = [
+            {"params": other_params, "lr": lr, "weight_decay": weight_decay},
+            {
+                "params": quantizer_params,
+                "lr": lr * quantizer_lr_multiplier,
+                "weight_decay": quantizer_weight_decay,
+            },
+        ]
+    else:
+        params = model.parameters()
     if name == "sgd":
         return SGD(
-            model.parameters(),
+            params,
             lr=lr,
             momentum=float(opt_config.get("momentum", 0.9)),
             weight_decay=weight_decay,
             nesterov=bool(opt_config.get("nesterov", False)),
         )
     if name == "adamw":
-        return AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
+        return AdamW(params, lr=lr, weight_decay=weight_decay)
     raise ValueError(f"Unsupported optimizer '{name}'.")
 
 
@@ -106,6 +132,7 @@ def train_one_epoch(
         if grad_clip is not None and grad_clip > 0:
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=float(grad_clip))
         optimizer.step()
+        clamp_lsq_scales(model)
 
         batch_size = targets.size(0)
         top1 = accuracy(logits, targets, topk=(1,))[0].item()

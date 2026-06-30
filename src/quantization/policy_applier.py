@@ -7,10 +7,11 @@ import re
 
 from torch import nn
 
+from src.agents.action_space import DEFAULT_ACTION_BITS
 from src.quantization.quant_layers import QuantConv2d, QuantLinear
 
 
-ACTION_BITS = tuple((weight_bits, activation_bits) for weight_bits in (4, 6, 8) for activation_bits in (4, 6, 8))
+ACTION_BITS = DEFAULT_ACTION_BITS
 RESIDUAL_BLOCK_RE = re.compile(r"^layer\d+\.\d+$")
 
 
@@ -38,11 +39,12 @@ def iter_residual_blocks(model: nn.Module) -> Iterable[tuple[str, nn.Module]]:
             yield name, module
 
 
-def _normalize_bit_pair(action) -> tuple[int, int]:
+def _normalize_bit_pair(action, action_bits: Sequence[tuple[int, int]] | None = None) -> tuple[int, int]:
+    choices = tuple(action_bits or ACTION_BITS)
     if isinstance(action, int):
-        if action < 0 or action >= len(ACTION_BITS):
-            raise ValueError(f"Invalid action index {action}; expected 0..{len(ACTION_BITS) - 1}.")
-        return ACTION_BITS[action]
+        if action < 0 or action >= len(choices):
+            raise ValueError(f"Invalid action index {action}; expected 0..{len(choices) - 1}.")
+        return choices[action]
 
     if isinstance(action, Mapping):
         weight_bits = action.get("weight_bits", action.get("w_bits"))
@@ -66,7 +68,11 @@ def _set_block_bits(block: nn.Module, weight_bits: int, activation_bits: int) ->
     return changed
 
 
-def apply_block_policy(model: nn.Module, block_actions) -> list[dict[str, int | str]]:
+def apply_block_policy(
+    model: nn.Module,
+    block_actions,
+    action_bits: Sequence[tuple[int, int]] | None = None,
+) -> list[dict[str, int | str]]:
     blocks = list(iter_residual_blocks(model))
     if isinstance(block_actions, Mapping):
         action_items = [(name, module, block_actions[name]) for name, module in blocks if name in block_actions]
@@ -81,7 +87,7 @@ def apply_block_policy(model: nn.Module, block_actions) -> list[dict[str, int | 
 
     applied = []
     for block_name, block, action in action_items:
-        weight_bits, activation_bits = _normalize_bit_pair(action)
+        weight_bits, activation_bits = _normalize_bit_pair(action, action_bits=action_bits)
         changed = _set_block_bits(block, weight_bits, activation_bits)
         applied.append(
             {

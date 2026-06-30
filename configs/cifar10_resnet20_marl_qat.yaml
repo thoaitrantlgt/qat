@@ -15,6 +15,7 @@ qat:
   first_last_bits: 8
 
 marl:
+  bit_choices: [2, 3, 4, 6, 8]
   warmup_epochs: 20
   warmup_weight_bits: 8
   warmup_activation_bits: 8
@@ -42,6 +43,8 @@ optimizer:
   lr: 0.0005
   momentum: 0.9
   weight_decay: 0.0005
+  quantizer_lr_multiplier: 0.1
+  quantizer_weight_decay: 0.0
   nesterov: false
 
 scheduler:

@@ -78,12 +78,26 @@ class LSQFakeQuantizer(nn.Module):
             return self.scale.view(*shape)
         return self.scale
 
+    def _grad_scale(self, x: torch.Tensor) -> float:
+        scale_elements = max(int(self.scale.numel()), 1)
+        elements_per_scale = max(int(x.numel() // scale_elements), 1)
+        qmax = max(abs(int(self.qmin)), abs(int(self.qmax)), 1)
+        return 1.0 / math.sqrt(elements_per_scale * qmax)
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         if not bool(self.initialized):
             self._init_scale(x)
 
         scale = torch.clamp(self._reshape_scale(x), min=torch.finfo(x.dtype).eps)
+        scale = (scale - scale.detach()) * self._grad_scale(x) + scale.detach()
         return fake_quantize_uniform(x, scale, self.qmin, self.qmax)
+
+
+def clamp_lsq_scales(module: nn.Module, eps: float = 1e-8) -> None:
+    with torch.no_grad():
+        for submodule in module.modules():
+            if isinstance(submodule, LSQFakeQuantizer):
+                submodule.scale.clamp_(min=eps)
 
 
 class LSQWeightQuantizer(LSQFakeQuantizer):

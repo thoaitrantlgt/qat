@@ -9,6 +9,7 @@ import torch
 from torch import nn
 from torch.optim import AdamW
 
+from src.agents.action_space import DEFAULT_BIT_CHOICES, build_action_bits
 from src.agents.actor import SharedActor, decode_actions
 from src.agents.policy_learner import PolicyLearningConfig, ReinforcePolicyLearner
 from src.agents.reward import RewardConfig, RewardEvaluator
@@ -16,6 +17,7 @@ from src.agents.state_builder import AgentStateBuilder, summarize_agent_states
 from src.datasets.cifar import CIFAR_STATS, build_cifar_loaders
 from src.models.resnet_cifar_qat import build_cifar_resnet_qat
 from src.quantization.bitops import collect_resource_stats
+from src.quantization.lsq import clamp_lsq_scales
 from src.quantization.policy_applier import apply_block_policy, set_uniform_bit_widths
 from src.training.train_fp32 import build_optimizer, build_scheduler, evaluate, load_config, resolve_device, train_one_epoch
 from src.utils.checkpoint import save_checkpoint
@@ -42,7 +44,11 @@ def apply_first_last_bits(model: nn.Module, first_last_bits: int | None) -> None
         model.fc.set_bits(int(first_last_bits), int(first_last_bits))
 
 
-def applied_policy_to_dict(applied: list[dict[str, int | str]], actions: torch.Tensor | None = None) -> dict[str, Any]:
+def applied_policy_to_dict(
+    applied: list[dict[str, int | str]],
+    actions: torch.Tensor | None = None,
+    action_bits: list[tuple[int, int]] | tuple[tuple[int, int], ...] | None = None,
+) -> dict[str, Any]:
     policy = {
         str(row["block_name"]): {
             "w_bits": int(row["weight_bits"]),
@@ -53,7 +59,10 @@ def applied_policy_to_dict(applied: list[dict[str, int | str]], actions: torch.T
     payload: dict[str, Any] = {"policy": policy}
     if actions is not None:
         payload["actions"] = [int(action) for action in actions.detach().cpu().reshape(-1).tolist()]
-        payload["bits"] = [{"weight_bits": w_bits, "activation_bits": a_bits} for w_bits, a_bits in decode_actions(actions)]
+        payload["bits"] = [
+            {"weight_bits": w_bits, "activation_bits": a_bits}
+            for w_bits, a_bits in decode_actions(actions, action_bits=action_bits)
+        ]
     return payload
 
 
@@ -94,6 +103,7 @@ def train_one_batch(
     if grad_clip is not None and grad_clip > 0:
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=float(grad_clip))
     optimizer.step()
+    clamp_lsq_scales(model)
 
     top1 = accuracy(logits, targets, topk=(1,))[0].item()
     return {"loss": float(loss.item()), "top1": float(top1), "skipped": 0.0}
@@ -121,6 +131,8 @@ def main() -> None:
     entropy_beta = float(marl_config.get("entropy_beta", 0.01))
     actor_hidden_dim = int(marl_config.get("actor_hidden_dim", 128))
     static_finetune_epochs = int(marl_config.get("static_finetune_epochs", 0))
+    bit_choices = tuple(int(bit) for bit in marl_config.get("bit_choices", DEFAULT_BIT_CHOICES))
+    action_bits = build_action_bits(bit_choices)
 
     model = build_cifar_resnet_qat(
         config["model"]["name"],
@@ -135,25 +147,49 @@ def main() -> None:
             checkpoint = torch.load(fp32_path, map_location=device)
             missing, unexpected = model.load_state_dict(checkpoint["model"], strict=False)
             print(f"loaded fp32 checkpoint: missing={len(missing)} unexpected={len(unexpected)}")
+            fp32_checkpoint_info: dict[str, Any] | None = {
+                "path": str(fp32_path),
+                "missing": len(missing),
+                "unexpected": len(unexpected),
+            }
         else:
             print(f"warning: fp32 checkpoint not found at {fp32_path}; training from scratch.")
+            fp32_checkpoint_info = {
+                "path": str(fp32_path),
+                "missing": None,
+                "unexpected": None,
+                "not_found": True,
+            }
+    else:
+        fp32_checkpoint_info = None
 
     set_uniform_bit_widths(model, warmup_weight_bits, warmup_activation_bits)
     apply_first_last_bits(model, int(first_last_bits) if first_last_bits is not None else None)
     initial_resource_stats = collect_resource_stats(model)
     initial_builder = AgentStateBuilder(initial_resource_stats)
     initial_states = initial_builder.build(model, {"epoch_ratio": 0.0})
-    actor = SharedActor(state_dim=initial_states.shape[1], hidden_dim=actor_hidden_dim).to(device)
+    actor = SharedActor(state_dim=initial_states.shape[1], hidden_dim=actor_hidden_dim, action_bits=action_bits).to(device)
 
     if args.dry_run:
         print(
             f"dry-run ok: model={config['model']['name']} num_classes={num_classes} device={device} "
-            f"agents={initial_states.shape[0]} state_dim={initial_states.shape[1]} actions={actor.num_actions}"
+            f"agents={initial_states.shape[0]} state_dim={initial_states.shape[1]} "
+            f"actions={actor.num_actions} bit_choices={list(bit_choices)}"
         )
         return
 
     train_loader, val_loader, _ = build_cifar_loaders(config)
     criterion = nn.CrossEntropyLoss()
+    warmstart_metrics = (
+        evaluate(model, val_loader, criterion, device)
+        if fp32_checkpoint_info and not fp32_checkpoint_info.get("not_found")
+        else None
+    )
+    if warmstart_metrics is not None:
+        print(
+            f"warmstart_eval top1={warmstart_metrics['top1']:.2f} "
+            f"loss={warmstart_metrics['loss']:.4f}"
+        )
     model_optimizer = build_optimizer(config, model)
     policy_optimizer = build_policy_optimizer(actor, marl_config)
     policy_learner = ReinforcePolicyLearner(
@@ -220,7 +256,7 @@ def main() -> None:
                     },
                 )
                 actions, log_probs, entropy = actor.sample(states)
-                bits = decode_actions(actions)
+                bits = decode_actions(actions, action_bits=action_bits)
                 applied = apply_block_policy(model, bits)
                 apply_first_last_bits(model, int(first_last_bits) if first_last_bits is not None else None)
                 updated_resource_stats = collect_resource_stats(model)
@@ -259,10 +295,15 @@ def main() -> None:
                     best_policy = {
                         "model": config["model"]["name"],
                         "dataset": config["dataset"]["name"],
-                        **applied_policy_to_dict(applied, actions),
+                        **applied_policy_to_dict(applied, actions, action_bits=action_bits),
                         "bitops_ratio": updated_resource_stats["bitops_ratio"],
                         "model_size_ratio": model_size_ratio(updated_resource_stats),
                         "reward": reward_result.to_dict(),
+                        "bit_choices": list(bit_choices),
+                        "action_bits": [
+                            {"weight_bits": w_bits, "activation_bits": a_bits}
+                            for w_bits, a_bits in action_bits
+                        ],
                         "epoch": epoch,
                         "global_step": global_step,
                     }
@@ -334,6 +375,8 @@ def main() -> None:
             {
                 "config": config,
                 "seed": seed,
+                "fp32_checkpoint": fp32_checkpoint_info,
+                "warmstart_metrics": warmstart_metrics,
                 "latest_epoch": epoch,
                 "history": history,
                 "policy_history": policy_history,

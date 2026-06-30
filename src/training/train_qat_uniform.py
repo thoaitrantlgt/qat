@@ -59,8 +59,21 @@ def main() -> None:
             checkpoint = torch.load(fp32_path, map_location=device)
             missing, unexpected = model.load_state_dict(checkpoint["model"], strict=False)
             print(f"loaded fp32 checkpoint: missing={len(missing)} unexpected={len(unexpected)}")
+            fp32_checkpoint_info: dict[str, Any] | None = {
+                "path": str(fp32_path),
+                "missing": len(missing),
+                "unexpected": len(unexpected),
+            }
         else:
             print(f"warning: fp32 checkpoint not found at {fp32_path}; training from scratch.")
+            fp32_checkpoint_info = {
+                "path": str(fp32_path),
+                "missing": None,
+                "unexpected": None,
+                "not_found": True,
+            }
+    else:
+        fp32_checkpoint_info = None
 
     if args.dry_run:
         set_uniform_bit_widths(model, weight_bits=weight_bits, activation_bits=activation_bits)
@@ -104,6 +117,18 @@ def main() -> None:
         if first_last_bits is not None:
             model.conv1.set_bits(int(first_last_bits), int(first_last_bits))
             model.fc.set_bits(int(first_last_bits), int(first_last_bits))
+
+    apply_precision(start_epoch)
+    warmstart_metrics = (
+        evaluate(model, val_loader, criterion, device)
+        if fp32_checkpoint_info and not fp32_checkpoint_info.get("not_found")
+        else None
+    )
+    if warmstart_metrics is not None:
+        print(
+            f"warmstart_eval top1={warmstart_metrics['top1']:.2f} "
+            f"loss={warmstart_metrics['loss']:.4f}"
+        )
 
     total_start = time.time()
     for epoch in range(start_epoch, epochs):
@@ -167,6 +192,8 @@ def main() -> None:
             {
                 "config": config,
                 "seed": seed,
+                "fp32_checkpoint": fp32_checkpoint_info,
+                "warmstart_metrics": warmstart_metrics,
                 "best_top1": best_top1,
                 "latest_epoch": epoch,
                 "history": history,

@@ -6,12 +6,17 @@ import torch
 from torch import nn
 from torch.distributions import Categorical
 
+from src.agents.action_space import DEFAULT_ACTION_BITS, DEFAULT_BIT_CHOICES, build_action_bits
 
-BIT_CHOICES = (4, 6, 8)
-ACTION_BITS = tuple((weight_bits, activation_bits) for weight_bits in BIT_CHOICES for activation_bits in BIT_CHOICES)
+BIT_CHOICES = DEFAULT_BIT_CHOICES
+ACTION_BITS = DEFAULT_ACTION_BITS
 
 
-def decode_actions(actions: torch.Tensor | Sequence[int] | int) -> list[tuple[int, int]]:
+def decode_actions(
+    actions: torch.Tensor | Sequence[int] | int,
+    action_bits: Sequence[tuple[int, int]] | None = None,
+) -> list[tuple[int, int]]:
+    choices = tuple(action_bits or ACTION_BITS)
     if isinstance(actions, torch.Tensor):
         flat_actions = actions.detach().cpu().reshape(-1).tolist()
     elif isinstance(actions, int):
@@ -22,25 +27,41 @@ def decode_actions(actions: torch.Tensor | Sequence[int] | int) -> list[tuple[in
     decoded = []
     for action in flat_actions:
         action_index = int(action)
-        if action_index < 0 or action_index >= len(ACTION_BITS):
-            raise ValueError(f"Invalid action index {action_index}; expected 0..{len(ACTION_BITS) - 1}.")
-        decoded.append(ACTION_BITS[action_index])
+        if action_index < 0 or action_index >= len(choices):
+            raise ValueError(f"Invalid action index {action_index}; expected 0..{len(choices) - 1}.")
+        decoded.append(choices[action_index])
     return decoded
 
 
-def encode_bits(bits: tuple[int, int] | Sequence[int]) -> int:
+def encode_bits(
+    bits: tuple[int, int] | Sequence[int],
+    action_bits: Sequence[tuple[int, int]] | None = None,
+) -> int:
+    choices = tuple(action_bits or ACTION_BITS)
     bit_pair = (int(bits[0]), int(bits[1]))
-    if bit_pair not in ACTION_BITS:
-        raise ValueError(f"Unsupported bit pair {bit_pair}; expected one of {ACTION_BITS}.")
-    return ACTION_BITS.index(bit_pair)
+    if bit_pair not in choices:
+        raise ValueError(f"Unsupported bit pair {bit_pair}; expected one of {choices}.")
+    return choices.index(bit_pair)
 
 
 class SharedActor(nn.Module):
-    def __init__(self, state_dim: int, hidden_dim: int = 128, num_actions: int = len(ACTION_BITS)) -> None:
+    def __init__(
+        self,
+        state_dim: int,
+        hidden_dim: int = 128,
+        num_actions: int | None = None,
+        bit_choices: Sequence[int] | None = None,
+        action_bits: Sequence[tuple[int, int]] | None = None,
+    ) -> None:
         super().__init__()
         self.state_dim = int(state_dim)
         self.hidden_dim = int(hidden_dim)
-        self.num_actions = int(num_actions)
+        self.action_bits = tuple(action_bits or build_action_bits(bit_choices))
+        self.num_actions = int(num_actions or len(self.action_bits))
+        if self.num_actions != len(self.action_bits):
+            raise ValueError(
+                f"num_actions={self.num_actions} does not match action_bits={len(self.action_bits)}."
+            )
         self.net = nn.Sequential(
             nn.Linear(self.state_dim, self.hidden_dim),
             nn.ReLU(inplace=True),
@@ -74,5 +95,9 @@ class SharedActor(nn.Module):
         return distribution.log_prob(actions), distribution.entropy()
 
 
-def build_actor(state_dim: int, hidden_dim: int = 128) -> SharedActor:
-    return SharedActor(state_dim=state_dim, hidden_dim=hidden_dim)
+def build_actor(
+    state_dim: int,
+    hidden_dim: int = 128,
+    bit_choices: Sequence[int] | None = None,
+) -> SharedActor:
+    return SharedActor(state_dim=state_dim, hidden_dim=hidden_dim, bit_choices=bit_choices)

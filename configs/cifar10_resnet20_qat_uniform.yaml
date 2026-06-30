@@ -28,6 +28,8 @@ optimizer:
   lr: 0.001
   momentum: 0.9
   weight_decay: 0.0005
+  quantizer_lr_multiplier: 0.1
+  quantizer_weight_decay: 0.0
   nesterov: false
 
 scheduler:
