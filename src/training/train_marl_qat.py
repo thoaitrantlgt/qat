@@ -132,7 +132,13 @@ def main() -> None:
     actor_hidden_dim = int(marl_config.get("actor_hidden_dim", 128))
     static_finetune_epochs = int(marl_config.get("static_finetune_epochs", 0))
     bit_choices = tuple(int(bit) for bit in marl_config.get("bit_choices", DEFAULT_BIT_CHOICES))
-    action_bits = build_action_bits(bit_choices)
+    weight_bit_choices = tuple(int(bit) for bit in marl_config.get("weight_bit_choices", bit_choices))
+    activation_bit_choices = tuple(int(bit) for bit in marl_config.get("activation_bit_choices", bit_choices))
+    action_bits = build_action_bits(
+        bit_choices=bit_choices,
+        weight_bit_choices=weight_bit_choices,
+        activation_bit_choices=activation_bit_choices,
+    )
 
     model = build_cifar_resnet_qat(
         config["model"]["name"],
@@ -174,7 +180,8 @@ def main() -> None:
         print(
             f"dry-run ok: model={config['model']['name']} num_classes={num_classes} device={device} "
             f"agents={initial_states.shape[0]} state_dim={initial_states.shape[1]} "
-            f"actions={actor.num_actions} bit_choices={list(bit_choices)}"
+            f"actions={actor.num_actions} weight_bits={list(weight_bit_choices)} "
+            f"activation_bits={list(activation_bit_choices)}"
         )
         return
 
@@ -209,9 +216,14 @@ def main() -> None:
 
     epochs = int(args.epochs or config["training"].get("epochs", 200))
     scheduler = build_scheduler(config, model_optimizer, epochs)
+    accuracy_target = marl_config.get("accuracy_target", None)
+    if accuracy_target is None and warmstart_metrics is not None:
+        accuracy_target = float(warmstart_metrics["top1"])
     reward_config = RewardConfig(
         lambda_bitops=float(marl_config.get("lambda_bitops", 0.1)),
         lambda_local=float(marl_config.get("lambda_local", 0.01)),
+        lambda_accuracy_drop=float(marl_config.get("lambda_accuracy_drop", 0.0)),
+        accuracy_target=float(accuracy_target) if accuracy_target is not None else None,
         smoothing_alpha=float(marl_config.get("reward_smoothing_alpha", 0.9)),
         val_subset_size=int(marl_config.get("val_subset_size", 2048)),
         clip_min=float(marl_config.get("reward_clip_min", -100.0)),
@@ -305,6 +317,8 @@ def main() -> None:
                         "model_size_ratio": model_size_ratio(updated_resource_stats),
                         "reward": reward_result.to_dict(),
                         "bit_choices": list(bit_choices),
+                        "weight_bit_choices": list(weight_bit_choices),
+                        "activation_bit_choices": list(activation_bit_choices),
                         "action_bits": [
                             {"weight_bits": w_bits, "activation_bits": a_bits}
                             for w_bits, a_bits in action_bits

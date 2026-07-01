@@ -15,17 +15,19 @@ qat:
   first_last_bits: 8
 
 marl:
-  bit_choices: [2, 3, 4, 6, 8]
+  weight_bit_choices: [2, 3, 4, 6, 8]
+  activation_bit_choices: [4, 6, 8]
   warmup_epochs: 20
   warmup_weight_bits: 8
   warmup_activation_bits: 8
-  policy_interval: 200
-  policy_lr: 0.0001
+  policy_interval: 100
+  policy_lr: 0.0002
   actor_hidden_dim: 128
-  entropy_beta: 0.02
-  lambda_bitops: 0.1
-  lambda_local: 0.01
-  reward_smoothing_alpha: 0.9
+  entropy_beta: 0.001
+  lambda_bitops: 0.05
+  lambda_local: 0.005
+  lambda_accuracy_drop: 2.0
+  reward_smoothing_alpha: 0.8
   val_subset_size: 2048
   bitops_budget_ratio: 0.25
   static_finetune_epochs: 0

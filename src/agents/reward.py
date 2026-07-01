@@ -15,6 +15,8 @@ from src.utils.metrics import AverageMeter, accuracy
 class RewardConfig:
     lambda_bitops: float = 0.1
     lambda_local: float = 0.01
+    lambda_accuracy_drop: float = 0.0
+    accuracy_target: float | None = None
     smoothing_alpha: float = 0.9
     val_subset_size: int = 2048
     clip_min: float = -100.0
@@ -114,14 +116,21 @@ def compute_rewards(
 ) -> RewardResult:
     config = config or RewardConfig()
     bitops_ratio = float(resource_stats.get("bitops_ratio", 1.0))
-    global_reward = validation_accuracy - config.lambda_bitops * bitops_ratio
+    accuracy_drop = 0.0
+    if config.accuracy_target is not None:
+        accuracy_drop = max(0.0, float(config.accuracy_target) - float(validation_accuracy))
+    global_reward = (
+        validation_accuracy
+        - config.lambda_bitops * bitops_ratio
+        - config.lambda_accuracy_drop * accuracy_drop
+    )
     global_reward = clip_reward(global_reward, config.clip_min, config.clip_max)
     smoothed_reward = moving_average.update(global_reward) if moving_average is not None else global_reward
 
     residual_blocks = [block for block in resource_stats.get("blocks", []) if str(block.get("kind")) == "residual"]
     block_bitops_ratios = [float(block.get("bitops_ratio", 0.0)) for block in residual_blocks]
     local_rewards = [
-        clip_reward(smoothed_reward - config.lambda_local * block_ratio, config.clip_min, config.clip_max)
+        clip_reward(global_reward - config.lambda_local * block_ratio, config.clip_min, config.clip_max)
         for block_ratio in block_bitops_ratios
     ]
 

@@ -51,12 +51,21 @@ class SharedActor(nn.Module):
         hidden_dim: int = 128,
         num_actions: int | None = None,
         bit_choices: Sequence[int] | None = None,
+        weight_bit_choices: Sequence[int] | None = None,
+        activation_bit_choices: Sequence[int] | None = None,
         action_bits: Sequence[tuple[int, int]] | None = None,
     ) -> None:
         super().__init__()
         self.state_dim = int(state_dim)
         self.hidden_dim = int(hidden_dim)
-        self.action_bits = tuple(action_bits or build_action_bits(bit_choices))
+        self.action_bits = tuple(
+            action_bits
+            or build_action_bits(
+                bit_choices=bit_choices,
+                weight_bit_choices=weight_bit_choices,
+                activation_bit_choices=activation_bit_choices,
+            )
+        )
         self.num_actions = int(num_actions or len(self.action_bits))
         if self.num_actions != len(self.action_bits):
             raise ValueError(
@@ -99,5 +108,13 @@ def build_actor(
     state_dim: int,
     hidden_dim: int = 128,
     bit_choices: Sequence[int] | None = None,
+    weight_bit_choices: Sequence[int] | None = None,
+    activation_bit_choices: Sequence[int] | None = None,
 ) -> SharedActor:
-    return SharedActor(state_dim=state_dim, hidden_dim=hidden_dim, bit_choices=bit_choices)
+    return SharedActor(
+        state_dim=state_dim,
+        hidden_dim=hidden_dim,
+        bit_choices=bit_choices,
+        weight_bit_choices=weight_bit_choices,
+        activation_bit_choices=activation_bit_choices,
+    )
