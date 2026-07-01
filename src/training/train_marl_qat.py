@@ -165,12 +165,12 @@ def main() -> None:
 
     set_uniform_bit_widths(model, warmup_weight_bits, warmup_activation_bits)
     apply_first_last_bits(model, int(first_last_bits) if first_last_bits is not None else None)
-    initial_resource_stats = collect_resource_stats(model)
-    initial_builder = AgentStateBuilder(initial_resource_stats)
-    initial_states = initial_builder.build(model, {"epoch_ratio": 0.0})
-    actor = SharedActor(state_dim=initial_states.shape[1], hidden_dim=actor_hidden_dim, action_bits=action_bits).to(device)
 
     if args.dry_run:
+        initial_resource_stats = collect_resource_stats(model)
+        initial_builder = AgentStateBuilder(initial_resource_stats)
+        initial_states = initial_builder.build(model, {"epoch_ratio": 0.0})
+        actor = SharedActor(state_dim=initial_states.shape[1], hidden_dim=actor_hidden_dim, action_bits=action_bits).to(device)
         print(
             f"dry-run ok: model={config['model']['name']} num_classes={num_classes} device={device} "
             f"agents={initial_states.shape[0]} state_dim={initial_states.shape[1]} "
@@ -190,6 +190,11 @@ def main() -> None:
             f"warmstart_eval top1={warmstart_metrics['top1']:.2f} "
             f"loss={warmstart_metrics['loss']:.4f}"
         )
+
+    initial_resource_stats = collect_resource_stats(model)
+    initial_builder = AgentStateBuilder(initial_resource_stats)
+    initial_states = initial_builder.build(model, {"epoch_ratio": 0.0})
+    actor = SharedActor(state_dim=initial_states.shape[1], hidden_dim=actor_hidden_dim, action_bits=action_bits).to(device)
     model_optimizer = build_optimizer(config, model)
     policy_optimizer = build_policy_optimizer(actor, marl_config)
     policy_learner = ReinforcePolicyLearner(

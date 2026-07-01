@@ -118,6 +118,9 @@ def main() -> None:
             model.conv1.set_bits(int(first_last_bits), int(first_last_bits))
             model.fc.set_bits(int(first_last_bits), int(first_last_bits))
 
+    def is_target_precision_epoch(epoch: int) -> bool:
+        return epoch >= warmup_epochs or (weight_bits == 8 and activation_bits == 8)
+
     apply_precision(start_epoch)
     warmstart_metrics = (
         evaluate(model, val_loader, criterion, device)
@@ -171,7 +174,7 @@ def main() -> None:
             f"val_top1={row['val_top1']:.2f} agent_states={agent_state_summary['num_agents']}x{agent_state_summary['state_dim']}"
         )
 
-        is_best = val_metrics["top1"] > best_top1
+        is_best = is_target_precision_epoch(epoch) and val_metrics["top1"] > best_top1
         if is_best:
             best_top1 = val_metrics["top1"]
 
