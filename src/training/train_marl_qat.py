@@ -221,6 +221,7 @@ def main() -> None:
         accuracy_target = float(warmstart_metrics["top1"])
     reward_config = RewardConfig(
         lambda_bitops=float(marl_config.get("lambda_bitops", 0.1)),
+        lambda_model_size=float(marl_config.get("lambda_model_size", 0.0)),
         lambda_local=float(marl_config.get("lambda_local", 0.01)),
         lambda_accuracy_drop=float(marl_config.get("lambda_accuracy_drop", 0.0)),
         accuracy_target=float(accuracy_target) if accuracy_target is not None else None,

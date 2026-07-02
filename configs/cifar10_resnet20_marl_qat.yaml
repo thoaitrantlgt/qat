@@ -24,7 +24,8 @@ marl:
   policy_lr: 0.0002
   actor_hidden_dim: 128
   entropy_beta: 0.0005
-  lambda_bitops: 0.05
+  lambda_bitops: 20.0
+  lambda_model_size: 15.0
   lambda_local: 0.005
   lambda_accuracy_drop: 3.0
   reward_smoothing_alpha: 0.5

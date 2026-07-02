@@ -14,6 +14,7 @@ from src.utils.metrics import AverageMeter, accuracy
 @dataclass(frozen=True)
 class RewardConfig:
     lambda_bitops: float = 0.1
+    lambda_model_size: float = 0.0
     lambda_local: float = 0.01
     lambda_accuracy_drop: float = 0.0
     accuracy_target: float | None = None
@@ -28,6 +29,7 @@ class RewardResult:
     validation_accuracy: float
     validation_loss: float
     bitops_ratio: float
+    model_size_ratio: float
     global_reward: float
     smoothed_reward: float
     local_rewards: list[float]
@@ -116,12 +118,20 @@ def compute_rewards(
 ) -> RewardResult:
     config = config or RewardConfig()
     bitops_ratio = float(resource_stats.get("bitops_ratio", 1.0))
+    fp32_model_bits = float(resource_stats.get("fp32_model_bits", 0.0))
+    total_model_bits = float(resource_stats.get("total_model_bits", 0.0))
+    model_size_ratio = (
+        float(resource_stats.get("model_size_ratio"))
+        if resource_stats.get("model_size_ratio") is not None
+        else total_model_bits / fp32_model_bits if fp32_model_bits else 1.0
+    )
     accuracy_drop = 0.0
     if config.accuracy_target is not None:
         accuracy_drop = max(0.0, float(config.accuracy_target) - float(validation_accuracy))
     global_reward = (
         validation_accuracy
         - config.lambda_bitops * bitops_ratio
+        - config.lambda_model_size * model_size_ratio
         - config.lambda_accuracy_drop * accuracy_drop
     )
     global_reward = clip_reward(global_reward, config.clip_min, config.clip_max)
@@ -138,6 +148,7 @@ def compute_rewards(
         validation_accuracy=float(validation_accuracy),
         validation_loss=0.0,
         bitops_ratio=bitops_ratio,
+        model_size_ratio=model_size_ratio,
         global_reward=global_reward,
         smoothed_reward=smoothed_reward,
         local_rewards=local_rewards,
