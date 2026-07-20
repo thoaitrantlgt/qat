@@ -4,12 +4,12 @@ Captioning-focused hierarchical multi-agent mixed-precision QAT for a pretrained
 
 ## Environment
 
-- Python 3.12; production target PyTorch 2.11 / CUDA 12.8
+- Python 3.10; production target PyTorch 2.11 / CUDA 12.8
 - AMP FP16 defaults for a 16 GB GPU (micro-batch 4, accumulation 8)
 - CPU synthetic tests require no downloads
 
 ```powershell
-py -3.12 -m venv .venv
+py -3.10 -m venv .venv
 .\.venv\Scripts\pip install -r requirements.txt
 .\.venv\Scripts\pip install -e .
 .\.venv\Scripts\python -m pytest -q
