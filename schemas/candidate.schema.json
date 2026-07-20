@@ -1,0 +1,1 @@
+{"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"hmaq-vlm/candidate/1.0","type":"object","required":["schema_version","policy_hash","valid","reward","metrics","cached"],"properties":{"schema_version":{"const":"1.0"},"policy_hash":{"type":"string"},"valid":{"type":"boolean"},"metrics":{"type":"object"}}}

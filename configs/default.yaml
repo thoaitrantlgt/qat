@@ -1,0 +1,39 @@
+seed: 11
+artifacts_dir: artifacts
+schema_version: "1.0"
+model:
+  vision_model: timm/vit_small_patch16_224.augreg_in21k_ft_in1k
+  vision_revision: 7e2c55630205e1266030f18370f4c6ed1a514b52
+  language_model: openai-community/gpt2
+  language_revision: 607a30d783dfa663caf39e06633721c8d4cfcd7e
+  image_size: 224
+  max_new_tokens: 30
+  gradient_checkpointing: true
+data:
+  coco_dataset: yerevann/coco-karpathy
+  coco_revision: 448fdb1bc7b2d09e46881c4541a14d796a3d41e8
+  flickr_images: null
+  flickr_annotations: null
+  workers: 4
+train:
+  micro_batch_size: 4
+  gradient_accumulation: 8
+  epochs: 10
+  projector_warmup_epochs: 3
+  gradient_clip: 1.0
+  projector_lr: 0.0001
+  vision_lr: 0.00001
+  language_lr: 0.000005
+  amp: fp16
+search:
+  candidate_budget: 100
+  timing_budget: 50
+  ppo_clip: 0.2
+  gae_lambda: 0.95
+  optimization_epochs: 4
+  actor_lr: 0.0003
+  critic_lr: 0.001
+  entropy: 0.01
+  vision_min_budget: 0.10
+  projector_min_budget: 0.05
+  language_min_budget: 0.30

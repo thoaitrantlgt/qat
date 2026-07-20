@@ -1,0 +1,1 @@
+{"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"hmaq-vlm/metrics/1.0","type":"object","required":["cider","bleu1","bleu4","meteor","rouge_l","spice","caption_length","empty_generation_rate","prefix_distortion","logit_kl","bitops_ratio","model_size_ratio","server_fake_quant_ms"],"properties":{"server_fake_quant_ms":{"type":"object","required":["p50","p95"]}}}

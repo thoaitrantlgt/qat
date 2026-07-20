@@ -1,0 +1,1 @@
+{"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"hmaq-vlm/manifest/1.0","type":"object","required":["schema_version","seed","splits","dataset_hash"],"properties":{"schema_version":{"const":"1.0"},"seed":{"type":"integer"},"splits":{"type":"object"},"dataset_hash":{"type":"string","pattern":"^[0-9a-f]{64}$"}}}

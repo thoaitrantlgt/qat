@@ -1,83 +1,54 @@
-# qat-agent
+# HMAQ-VLM
 
-Multi-agent adaptive QAT for CNNs.
+Captioning-focused hierarchical multi-agent mixed-precision QAT for a pretrained ViT-Small + projector + GPT-2 Small model. This cleanly replaces the previous image-classification pipeline and has no runtime dependency on Giathoai/VLM.
 
-## Setup
+## Environment
 
-1. Run `.\scripts\setup.ps1`
-1. On a default Windows shell, run `scripts\setup.cmd` instead
-2. Activate the environment:
-
-```powershell
-.\.venv\Scripts\Activate.ps1
-```
-
-3. Run the FP32 baseline:
+- Python 3.12; production target PyTorch 2.11 / CUDA 12.8
+- AMP FP16 defaults for a 16 GB GPU (micro-batch 4, accumulation 8)
+- CPU synthetic tests require no downloads
 
 ```powershell
-.\scripts\run_fp32.cmd -Config configs/cifar100_resnet32_fp32.yaml -Epochs 1
+py -3.12 -m venv .venv
+.\.venv\Scripts\pip install -r requirements.txt
+.\.venv\Scripts\pip install -e .
+.\.venv\Scripts\python -m pytest -q
 ```
 
-4. Run the uniform QAT baseline:
+Resolve config and record reproducibility metadata:
 
 ```powershell
-.\scripts\run_uniform_qat.cmd -Config configs/cifar100_resnet32_qat_uniform.yaml -Epochs 1
+python -m hmaq_vlm.cli resolve-config --config configs/default.yaml --output artifacts/metrics/resolved_run.json
 ```
 
-5. Run the low-bit warm-start QAT baseline:
+Build immutable Flickr30k manifests from supplied files:
 
 ```powershell
-.\scripts\run_uniform_qat.cmd -Config configs/cifar100_resnet32_qat_w4a8.yaml -Epochs 1
+python -m hmaq_vlm.cli prepare-flickr --images D:\flickr30k-images --annotations D:\dataset_flickr30k.json --output artifacts/manifests/flickr30k --seed 11
 ```
 
-6. Run the CIFAR-10 QAT baseline:
+Download the pinned COCO image-caption metadata and images, then preserve Karpathy validation/test while deriving policy-search from train/restval:
 
 ```powershell
-.\scripts\run_uniform_qat.cmd -Config configs/cifar10_resnet20_qat_uniform.yaml -Epochs 1
+python -m hmaq_vlm.cli prepare-coco --cache data/coco-karpathy --output artifacts/manifests/coco-karpathy --seed 11 --policy-fraction 0.10
 ```
 
-7. Run the baseline suite, summarize results, and generate a chart. The script will train any missing checkpoints first, then write the CSV/Markdown summary and chart:
+Run the complete network-free acceptance pipeline (FP16 step, generation, calibrated QAT step, five searches, static export, and reports):
 
 ```powershell
-.\scripts\run_baselines.cmd
+python -m hmaq_vlm.cli acceptance-smoke --output artifacts/smoke --seed 11 --search-budget 4 --timing-budget 2
 ```
 
-For a fair CIFAR-10/ResNet20 baseline suite matching the multi-agent config:
+Production commands use the same manifest/config contracts:
 
 ```powershell
-.\scripts\run_baselines.cmd -Suite cifar10_resnet20 -Epochs 100
+python -m hmaq_vlm.cli train-fp16 --config configs/default.yaml --manifests artifacts/manifests/coco-karpathy --output artifacts/checkpoints/fp16
+python -m hmaq_vlm.cli profile --config configs/default.yaml --manifests artifacts/manifests/coco-karpathy --teacher artifacts/checkpoints/fp16/teacher_best.pt --output artifacts/profiles/sensitivity.json
+python -m hmaq_vlm.cli search --config configs/default.yaml --manifests artifacts/manifests/coco-karpathy --teacher artifacts/checkpoints/fp16/teacher_best.pt --method hierarchical_mappo --output artifacts/policies/hmaq
+python -m hmaq_vlm.cli train-qat --config configs/default.yaml --manifests artifacts/manifests/coco-karpathy --teacher artifacts/checkpoints/fp16/teacher_best.pt --policy artifacts/policies/selected.json --output artifacts/checkpoints/hmaq
+python -m hmaq_vlm.cli evaluate --config configs/default.yaml --manifests artifacts/manifests/coco-karpathy --checkpoint artifacts/checkpoints/hmaq/static_qat.pt --split test --output artifacts/metrics/hmaq_test.json
 ```
 
-8. Run adaptive multi-agent QAT:
+COCO/pretrained/CUDA runs are integration workloads and use the exact revisions in `configs/default.yaml`. Quantizable groups expose all 16 Cartesian actions from `{2,4,8,16}²`; embeddings, normalization, Softmax, caption loss, and GPT-2 output head stay FP16. A 16-bit quantizer is an exact bypass.
 
-```powershell
-.\scripts\run_marl_qat.cmd -Config configs/cifar10_resnet20_marl_qat.yaml -Epochs 100
-```
-
-9. Export and optionally fine-tune the static mixed-precision policy:
-
-```powershell
-.\scripts\export_policy.cmd -Config configs/cifar10_resnet20_marl_qat.yaml -Policy outputs/policies/resnet20_cifar10_marl_qat_policy.json -Checkpoint outputs/checkpoints/resnet20_cifar10_marl_qat_best.pt -FineTuneEpochs 20
-```
-
-10. Run the full fair comparison end-to-end:
-
-```powershell
-.\scripts\run_fair_comparison.cmd
-```
-
-On Linux, macOS, WSL, or zsh:
-
-```bash
-chmod +x scripts/run_fair_comparison.sh
-./scripts/run_fair_comparison.sh
-```
-
-This writes the combined comparison table and chart under `outputs/tables/cifar10_resnet20/`.
-
-## Notes
-
-- The project uses Python 3.12.
-- `.venv` is created with `--system-site-packages` so it can reuse the machine's existing PyTorch install.
-- Put CIFAR data under `data/` or set `dataset.download: true` in the config.
-- If you prefer PowerShell directly, use `powershell.exe -ExecutionPolicy Bypass -File .\scripts\setup.ps1`.
+Server timing is always stored as `server_fake_quant_ms` and marked diagnostic-only. It is not Jetson latency, energy, or evidence of native INT2/INT4 speedup. Real Jetson execution remains behind the versioned bundle contract.

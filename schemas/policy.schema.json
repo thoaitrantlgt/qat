@@ -1,0 +1,1 @@
+{"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"hmaq-vlm/policy/1.0","type":"object","additionalProperties":{"type":"object","required":["weight_bits","activation_bits"],"properties":{"weight_bits":{"enum":[2,4,8,16]},"activation_bits":{"enum":[2,4,8,16]}}}}

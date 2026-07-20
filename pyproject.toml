@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=75", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hmaq-vlm"
+version = "0.1.0"
+description = "Hierarchical mixed-precision QAT for image captioning"
+requires-python = ">=3.12,<3.13"
+dependencies = ["torch==2.11.0", "numpy>=2.0,<3", "PyYAML>=6.0,<7"]
+
+[project.optional-dependencies]
+integration = ["timm>=1.0,<2", "transformers>=4.53,<5", "datasets>=3.6,<5", "huggingface-hub>=0.33,<2", "Pillow>=11,<13", "pycocoevalcap>=1.2,<2"]
+reporting = ["matplotlib>=3.10,<4"]
+test = ["pytest>=8.4,<10"]
+
+[project.scripts]
+hmaq-vlm = "hmaq_vlm.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["integration: requires pretrained assets or network", "cuda: requires a CUDA GPU"]

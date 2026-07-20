@@ -1,0 +1,1 @@
+{"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"hmaq-vlm/checkpoint/1.0","type":"object","required":["schema_version","model_state","policy","metadata"],"properties":{"schema_version":{"const":"1.0"},"model_state":{"type":"object"},"policy":{"type":"object"},"metadata":{"type":"object"}}}

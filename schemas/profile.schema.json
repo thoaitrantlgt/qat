@@ -1,0 +1,1 @@
+{"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"hmaq-vlm/profile/1.0","type":"object","required":["schema_version","group","weight_bits","activation_bits","caption_loss_delta","prefix_distortion","logit_kl","activation_range","gradient_norm","parameters","bitops","model_size_bytes"],"properties":{"schema_version":{"const":"1.0"}}}
