@@ -1,13 +1,21 @@
 from __future__ import annotations
 
+import io
 import json
+import tarfile
 from pathlib import Path
 
 import torch
 import pytest
 
 from hmaq_vlm.data import build_karpathy_manifests, load_manifest_set
-from hmaq_vlm.data.sources import SourceCaptionImage, load_flickr30k_records
+from hmaq_vlm.data.sources import (
+    FLICKR30K_DATASET,
+    FLICKR30K_REVISION,
+    SourceCaptionImage,
+    download_flickr30k_source,
+    load_flickr30k_records,
+)
 from hmaq_vlm.models import HMAQVLM
 from hmaq_vlm.quantization import MixedPrecisionPolicy, PrecisionAction, build_quant_group_registry, inject_quantizers
 from hmaq_vlm.training import build_optimizer, calibrate_quantizers, caption_training_step, set_trainable_stage
@@ -26,6 +34,65 @@ def test_flickr_loader_uses_supplied_paths_and_image_level_records(tmp_path: Pat
     assert len(records) == 1
     assert records[0].captions == ("A caption.", "Second caption")
     assert records[0].source_split == "train"
+
+
+def test_flickr_download_uses_pinned_karpathy_source_and_cache(tmp_path: Path) -> None:
+    annotation = tmp_path / "dataset_flickr30k.json"
+    annotation.write_text(
+        json.dumps(
+            {
+                "images": [
+                    {
+                        "filename": "a.jpg",
+                        "imgid": 7,
+                        "split": "val",
+                        "sentences": [{"raw": "A standard caption."}],
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    archive_path = tmp_path / "flickr30k-images.tar"
+    with tarfile.open(archive_path, "w") as archive:
+        info = tarfile.TarInfo("flickr30k-images/a.jpg")
+        info.size = 5
+        archive.addfile(info, io.BytesIO(b"image"))
+
+    downloads = {
+        "dataset_flickr30k.json": annotation,
+        "flickr30k-images.tar": archive_path,
+    }
+    calls = []
+
+    def fake_download(**kwargs):
+        calls.append(kwargs)
+        return str(downloads[kwargs["filename"]])
+
+    images, annotations = download_flickr30k_source(tmp_path / "cache", downloader=fake_download)
+    assert annotations == annotation.resolve()
+    assert (images / "a.jpg").read_bytes() == b"image"
+    assert {call["repo_id"] for call in calls} == {FLICKR30K_DATASET}
+    assert {call["revision"] for call in calls} == {FLICKR30K_REVISION}
+    assert {call["repo_type"] for call in calls} == {"dataset"}
+    records = load_flickr30k_records(images, annotations)
+    assert records[0].source_split == "val"
+
+
+def test_flickr_download_rejects_unsafe_archive_members(tmp_path: Path) -> None:
+    annotation = tmp_path / "dataset_flickr30k.json"
+    annotation.write_text('{"images": []}', encoding="utf-8")
+    archive_path = tmp_path / "flickr30k-images.tar"
+    with tarfile.open(archive_path, "w") as archive:
+        info = tarfile.TarInfo("../escape.jpg")
+        info.size = 1
+        archive.addfile(info, io.BytesIO(b"x"))
+
+    def fake_download(**kwargs):
+        return str(annotation if kwargs["filename"].endswith(".json") else archive_path)
+
+    with pytest.raises(ValueError, match="unsafe Flickr30k archive member"):
+        download_flickr30k_source(tmp_path / "cache", downloader=fake_download)
 
 
 def test_karpathy_manifest_preserves_validation_and_test_isolation(tmp_path: Path) -> None:

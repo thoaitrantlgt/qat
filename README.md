@@ -21,11 +21,17 @@ Resolve config and record reproducibility metadata:
 python -m hmaq_vlm.cli resolve-config --config configs/default.yaml --output artifacts/metrics/resolved_run.json
 ```
 
-Build immutable Flickr30k manifests from supplied files:
+Automatically download the pinned Flickr30k images and canonical Karpathy annotations, then preserve the standard validation/test splits while deriving policy-search only from train:
 
-```powershell
-python -m hmaq_vlm.cli prepare-flickr --images D:\flickr30k-images --annotations D:\dataset_flickr30k.json --output artifacts/manifests/flickr30k --seed 11
+```bash
+python -m hmaq_vlm.cli prepare-flickr \
+  --cache data/flickr30k \
+  --output artifacts/manifests/flickr30k \
+  --seed 11 \
+  --policy-fraction 0.10
 ```
+
+The first run downloads a pinned 4.44 GB image archive and extracts it under the cache directory, so reserve roughly 9 GB. Interrupted extractions are discarded and safely resumed. To use an existing local copy instead, pass `--images /path/to/flickr30k-images --annotations /path/to/dataset_flickr30k.json`.
 
 Download the pinned COCO image-caption metadata and images, then preserve Karpathy validation/test while deriving policy-search from train/restval:
 

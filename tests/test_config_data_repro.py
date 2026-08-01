@@ -8,6 +8,7 @@ import pytest
 from hmaq_vlm.config import ExperimentConfig, load_config
 from hmaq_vlm.data import CaptionImage, ManifestSet, build_manifests, load_manifest_set
 from hmaq_vlm.reproducibility import atomic_write_json, file_sha256, stable_hash
+from hmaq_vlm.cli import build_parser
 
 
 def test_typed_config_is_strict_and_resolved(tmp_path: Path) -> None:
@@ -55,3 +56,31 @@ def test_image_level_manifests_are_disjoint_and_detect_drift(tmp_path: Path) -> 
     Path(images[0].image_path).write_bytes(b"changed")
     with pytest.raises(ValueError, match="checksum drift"):
         load_manifest_set(paths)
+
+
+def test_prepare_flickr_cli_supports_automatic_and_local_sources() -> None:
+    parser = build_parser()
+    automatic = parser.parse_args(
+        [
+            "prepare-flickr",
+            "--cache",
+            "data/flickr30k",
+            "--output",
+            "artifacts/manifests/flickr30k",
+        ]
+    )
+    assert automatic.cache == Path("data/flickr30k")
+    assert automatic.images is None
+    local = parser.parse_args(
+        [
+            "prepare-flickr",
+            "--images",
+            "images",
+            "--annotations",
+            "dataset_flickr30k.json",
+            "--output",
+            "artifacts/manifests/flickr30k",
+        ]
+    )
+    assert local.images == Path("images")
+    assert local.annotations == Path("dataset_flickr30k.json")

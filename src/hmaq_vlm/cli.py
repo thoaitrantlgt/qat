@@ -4,7 +4,7 @@ import argparse
 from pathlib import Path
 
 from hmaq_vlm.config import load_config
-from hmaq_vlm.data import CaptionImage, build_karpathy_manifests, build_manifests, load_coco_karpathy_records, load_flickr30k_records
+from hmaq_vlm.data import FLICKR30K_REVISION, build_karpathy_manifests, download_flickr30k_source, load_coco_karpathy_records, load_flickr30k_records
 from hmaq_vlm.reproducibility import atomic_write_json, collect_run_metadata
 from hmaq_vlm.smoke import run_acceptance_smoke
 from hmaq_vlm.workflow import evaluate_checkpoint, profile_sensitivity, search_policies, train_fp16, train_qat
@@ -12,13 +12,21 @@ from hmaq_vlm.workflow import evaluate_checkpoint, profile_sensitivity, search_p
 
 def _resolve(args: argparse.Namespace) -> None:
     config = load_config(args.config)
-    revisions = {"coco": config.data.coco_revision, "vision": config.model.vision_revision, "gpt2": config.model.language_revision}
+    revisions = {"coco": config.data.coco_revision, "flickr30k": FLICKR30K_REVISION, "vision": config.model.vision_revision, "gpt2": config.model.language_revision}
     atomic_write_json(args.output, collect_run_metadata(config.to_dict(), config.seed, revisions))
 
 
 def _prepare_flickr(args: argparse.Namespace) -> None:
-    records = load_flickr30k_records(args.images, args.annotations)
-    build_manifests([CaptionImage(item.image_id, item.image_path, item.captions) for item in records], args.output, seed=args.seed)
+    if args.cache is not None:
+        if args.images is not None or args.annotations is not None:
+            raise ValueError("use either --cache for automatic download or --images with --annotations")
+        images, annotations = download_flickr30k_source(args.cache)
+    else:
+        if args.images is None or args.annotations is None:
+            raise ValueError("local Flickr30k preparation requires both --images and --annotations")
+        images, annotations = args.images, args.annotations
+    records = load_flickr30k_records(images, annotations)
+    build_karpathy_manifests(records, args.output, seed=args.seed, policy_fraction=args.policy_fraction)
 
 
 def _acceptance_smoke(args: argparse.Namespace) -> None:
@@ -58,10 +66,12 @@ def build_parser() -> argparse.ArgumentParser:
     resolved.add_argument("--output", type=Path, required=True)
     resolved.set_defaults(function=_resolve)
     flickr = commands.add_parser("prepare-flickr")
-    flickr.add_argument("--images", type=Path, required=True)
-    flickr.add_argument("--annotations", type=Path, required=True)
+    flickr.add_argument("--cache", type=Path)
+    flickr.add_argument("--images", type=Path)
+    flickr.add_argument("--annotations", type=Path)
     flickr.add_argument("--output", type=Path, required=True)
     flickr.add_argument("--seed", type=int, default=11)
+    flickr.add_argument("--policy-fraction", type=float, default=0.10)
     flickr.set_defaults(function=_prepare_flickr)
     smoke = commands.add_parser("acceptance-smoke")
     smoke.add_argument("--output", type=Path, required=True)
