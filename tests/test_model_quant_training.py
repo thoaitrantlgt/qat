@@ -9,6 +9,7 @@ from torch.nn import functional as F
 
 from hmaq_vlm.losses import consistency_losses
 from hmaq_vlm.models import HMAQVLM
+from hmaq_vlm.models.pretrained import _load_vision_backbone_checkpoint
 from hmaq_vlm.quantization import (
     ACTION_SPACE,
     LSQFakeQuantizer,
@@ -60,6 +61,24 @@ class TinyLM(nn.Module):
 
 def make_model(lm: TinyLM | None = None) -> HMAQVLM:
     return HMAQVLM(TinyVision(), lm or TinyLM(), vision_dim=6, language_dim=8)
+
+
+def test_pretrained_vision_loader_ignores_only_classifier_head(tmp_path) -> None:
+    class FakeModels:
+        incompatible = SimpleNamespace(missing_keys=[], unexpected_keys=["head.weight", "head.bias"])
+
+        @classmethod
+        def load_checkpoint(cls, model, checkpoint, strict):
+            assert strict is False
+            return cls.incompatible
+
+    fake_timm = SimpleNamespace(models=FakeModels)
+    checkpoint = tmp_path / "model.safetensors"
+    _load_vision_backbone_checkpoint(fake_timm, nn.Identity(), checkpoint)
+
+    FakeModels.incompatible = SimpleNamespace(missing_keys=["blocks.0.weight"], unexpected_keys=[])
+    with pytest.raises(RuntimeError, match="blocks.0.weight"):
+        _load_vision_backbone_checkpoint(fake_timm, nn.Identity(), checkpoint)
 
 
 def test_forward_aligns_visual_text_masks_positions_and_shifted_labels() -> None:

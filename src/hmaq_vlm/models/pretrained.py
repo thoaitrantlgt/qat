@@ -6,6 +6,27 @@ from hmaq_vlm.config import ModelConfig
 from .vlm import HMAQVLM
 
 
+_VISION_CLASSIFIER_KEYS = frozenset({"head.weight", "head.bias"})
+
+
+def _load_vision_backbone_checkpoint(timm, vision, checkpoint: Path) -> None:
+    """Load a classification checkpoint into a headless vision backbone."""
+    incompatible = timm.models.load_checkpoint(vision, str(checkpoint), strict=False)
+    if incompatible is None:
+        return
+
+    missing = set(getattr(incompatible, "missing_keys", ()))
+    unexpected = set(getattr(incompatible, "unexpected_keys", ()))
+    unexpected_backbone = unexpected - _VISION_CLASSIFIER_KEYS
+    if missing or unexpected_backbone:
+        details = []
+        if missing:
+            details.append(f"missing={sorted(missing)}")
+        if unexpected_backbone:
+            details.append(f"unexpected={sorted(unexpected_backbone)}")
+        raise RuntimeError(f"ViT checkpoint does not match the configured backbone: {'; '.join(details)}")
+
+
 def load_pretrained_vlm(config: ModelConfig) -> HMAQVLM:
     """Load revision-pinned ViT-Small and GPT-2 Small without a source dependency on Giathoai/VLM."""
     try:
@@ -20,7 +41,7 @@ def load_pretrained_vlm(config: ModelConfig) -> HMAQVLM:
     checkpoints = list(vision_dir.glob("*.safetensors")) or list(vision_dir.glob("*.bin"))
     if not checkpoints:
         raise RuntimeError(f"revision-pinned ViT snapshot contains no supported checkpoint: {vision_dir}")
-    timm.models.load_checkpoint(vision, str(checkpoints[0]))
+    _load_vision_backbone_checkpoint(timm, vision, checkpoints[0])
     if config.gradient_checkpointing and hasattr(vision, "set_grad_checkpointing"):
         vision.set_grad_checkpointing(True)
     language = AutoModelForCausalLM.from_pretrained(config.language_model, revision=config.language_revision)
