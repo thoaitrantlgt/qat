@@ -15,11 +15,13 @@ data:
   flickr_images: null
   flickr_annotations: null
   workers: 4
+  train_sample_limit: 30000
+  validation_sample_limit: 1000
 train:
-  micro_batch_size: 4
-  gradient_accumulation: 8
-  epochs: 10
-  projector_warmup_epochs: 3
+  micro_batch_size: 8
+  gradient_accumulation: 4
+  epochs: 3
+  projector_warmup_epochs: 1
   gradient_clip: 1.0
   projector_lr: 0.0001
   vision_lr: 0.00001

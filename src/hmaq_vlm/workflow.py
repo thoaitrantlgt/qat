@@ -50,6 +50,11 @@ def _records(root: str | Path, split: str) -> list[CaptionImage]:
     return [CaptionImage(**json.loads(line)) for line in path.read_text(encoding="utf-8").splitlines()]
 
 
+def _limited_records(root: str | Path, split: str, limit: int | None) -> list[CaptionImage]:
+    records = _records(root, split)
+    return records if limit is None else records[:limit]
+
+
 def _loader(records: list[CaptionImage], processor, tokenizer, config: ExperimentConfig, *, shuffle: bool) -> DataLoader:
     generator = torch.Generator().manual_seed(config.seed)
     return DataLoader(records, batch_size=config.train.micro_batch_size, shuffle=shuffle, generator=generator, num_workers=config.data.workers, collate_fn=CaptionCollator(processor, tokenizer), pin_memory=torch.cuda.is_available())
@@ -121,8 +126,8 @@ def train_fp16(config_path: str | Path, manifests: str | Path, output: str | Pat
     model, tokenizer, processor = _components(config)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
-    train_loader = _loader(_records(manifests, "train"), processor, tokenizer, config, shuffle=True)
-    validation = _records(manifests, "validation")
+    train_loader = _loader(_limited_records(manifests, "train", config.data.train_sample_limit), processor, tokenizer, config, shuffle=True)
+    validation = _limited_records(manifests, "validation", config.data.validation_sample_limit)
     destination = Path(output)
     best_cider = float("-inf")
     best_path = destination / "teacher_best.pt"
@@ -157,7 +162,7 @@ def train_qat(config_path: str | Path, manifests: str | Path, teacher_checkpoint
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     student.to(device)
     teacher.to(device)
-    train_loader = _loader(_records(manifests, "train"), processor, tokenizer, config, shuffle=True)
+    train_loader = _loader(_limited_records(manifests, "train", config.data.train_sample_limit), processor, tokenizer, config, shuffle=True)
     calibration = []
     for index, batch in enumerate(train_loader):
         calibration.append(_device_batch(batch, device))
@@ -167,7 +172,7 @@ def train_qat(config_path: str | Path, manifests: str | Path, teacher_checkpoint
     set_trainable_stage(student, config.train.projector_warmup_epochs + 1, config.train.projector_warmup_epochs)
     optimizer = build_optimizer(student, projector_lr=config.train.projector_lr, vision_lr=config.train.vision_lr, language_lr=config.train.language_lr)
     history = []
-    validation = _records(manifests, "validation")
+    validation = _limited_records(manifests, "validation", config.data.validation_sample_limit)
     best_cider = float("-inf")
     destination = Path(output)
     checkpoint_path = destination / "static_qat.pt"

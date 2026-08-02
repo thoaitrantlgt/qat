@@ -22,6 +22,7 @@ def test_typed_config_is_strict_and_resolved(tmp_path: Path) -> None:
     assert cfg.seed == 22
     assert cfg.model.max_new_tokens == 17
     assert cfg.train.effective_batch_size == 2 * cfg.train.gradient_accumulation
+    assert cfg.data.train_sample_limit is None
     bad = tmp_path / "bad.yaml"
     bad.write_text("unknown: true\n", encoding="utf-8")
     with pytest.raises(ValueError, match="unknown config key"):
@@ -30,6 +31,10 @@ def test_typed_config_is_strict_and_resolved(tmp_path: Path) -> None:
     wrong_type.write_text("seed: eleven\ntrain:\n  epochs: 0\n", encoding="utf-8")
     with pytest.raises(ValueError, match="seed"):
         load_config(wrong_type)
+    invalid_limit = tmp_path / "invalid_limit.yaml"
+    invalid_limit.write_text("data:\n  train_sample_limit: 0\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="sample limits"):
+        load_config(invalid_limit)
 
 
 def test_atomic_json_and_stable_hash_are_deterministic(tmp_path: Path) -> None:

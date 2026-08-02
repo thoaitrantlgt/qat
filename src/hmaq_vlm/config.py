@@ -26,6 +26,8 @@ class DataConfig:
     flickr_images: str | None = None
     flickr_annotations: str | None = None
     workers: int = 4
+    train_sample_limit: int | None = None
+    validation_sample_limit: int | None = None
 
 
 @dataclass(frozen=True)
@@ -114,6 +116,9 @@ def load_config(path: str | Path) -> ExperimentConfig:
     config = _construct(ExperimentConfig, raw)
     if config.seed < 0 or config.train.micro_batch_size < 1 or config.train.gradient_accumulation < 1 or config.train.epochs < 1:
         raise ValueError("seed must be non-negative and training counts must be positive")
+    sample_limits = (config.data.train_sample_limit, config.data.validation_sample_limit)
+    if any(value is not None and value < 1 for value in sample_limits):
+        raise ValueError("data sample limits must be positive when set")
     if not 0 <= config.train.projector_warmup_epochs <= config.train.epochs or config.train.gradient_clip <= 0 or config.train.amp != "fp16":
         raise ValueError("invalid training schedule, clipping, or AMP mode")
     if not 0 <= config.model.max_new_tokens <= 30 or config.model.image_size < 1:
